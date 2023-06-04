@@ -28,11 +28,11 @@ public class Product {
         this.type = type;
     }
 
-    public BigDecimal getPrice() {
+    public Double getPrice() {
         return price;
     }
 
-    public void setPrice(BigDecimal price) {
+    public void setPrice(Double price) {
         this.price = price;
     }
 
@@ -43,20 +43,28 @@ public class Product {
     protected String type;
     @NotNull
     @Positive
-    protected BigDecimal price;
+    protected Double price;
 
 
-    @JsonCreator
-    public Product(@JsonProperty("name") String name,
-                   @JsonProperty("type") String type,
-                   @JsonProperty("price") String price) {
+    public Product( String name,
+                    String type,
+                    String price) {
         this.name = name;
         this.type = type;
-        this.price = new BigDecimal(price);
+        this.price = Double.parseDouble(price);
     }
 
     public Map<String, Object> toMap() {
         ObjectMapper mapper = new ObjectMapper();
         return mapper.convertValue(this, new TypeReference<>() {});
+    }
+
+    @Override
+    public String toString() {
+        return "Product{" +
+                "name='" + name + '\'' +
+                ", type='" + type + '\'' +
+                ", price=" + price +
+                '}';
     }
 }

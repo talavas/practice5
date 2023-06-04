@@ -1,10 +1,7 @@
 package shpp.level3.seed;
 
 import com.google.api.core.ApiFuture;
-import com.google.cloud.firestore.CollectionReference;
-import com.google.cloud.firestore.DocumentReference;
-import com.google.cloud.firestore.WriteBatch;
-import com.google.cloud.firestore.WriteResult;
+import com.google.firebase.database.DatabaseReference;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -17,15 +14,17 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 
 public class FirestoreSeeder {
     private final Logger logger = LoggerFactory.getLogger(FirestoreSeeder.class);
     FireBaseService fireBaseService;
 
-    StopWatch timer = new StopWatch();
+
 
     int counter = 0;
 
@@ -33,12 +32,11 @@ public class FirestoreSeeder {
         this.fireBaseService = fireBaseService;
     }
 
-    public void seed(String filename) {
+    public void seed(String filename) throws IOException {
+
         String collectionName = filename.substring(0, filename.lastIndexOf("."));
-        //fireBaseService.deleteCollection(collectionName);
-        timer.reset();
-        timer.start();
-        CollectionReference collection = fireBaseService.getCollection(collectionName);
+        StopWatch timer = new StopWatch();
+
         InputStream csvFileInputStream = getClass().getClassLoader().getResourceAsStream(filename);
 
         if (csvFileInputStream != null) {
@@ -47,42 +45,31 @@ public class FirestoreSeeder {
                 CSVParser csvParser = csvFormat.parse(reader);
                 List<CSVRecord> records = csvParser.getRecords();
 
-                WriteBatch batch = fireBaseService.getFirestore().batch();
+
+                logger.info("Start reading rows from csv file {}.", filename);
                 timer.reset();
                 timer.start();
-                logger.info("Start reading rows from csv file {}.", filename);
-
+                DatabaseReference ref = fireBaseService.getDb().getReference(collectionName);
+                Map<String, Object> types = new HashMap<>();
                 for (CSVRecord row : records) {
-                    DocumentReference documentRef = collection.document();
-                    batch.set(documentRef, row.toMap());
+                    types.put(UUID.randomUUID().toString(), row.toMap());
                     counter++;
-
-                    // Вставити пакет, якщо досягнуто розміру пакету
-                    if (batch.getMutationsSize() >= fireBaseService.getBatchSize()) {
-                        logger.debug("Commit batch of rows.");
-                        batch.commit().get();
-                        logger.debug("Batch inserted.");
-                        batch = fireBaseService.getFirestore().batch();
-                    }
                 }
+                ApiFuture<Void> future = ref.setValueAsync(types);
+                future.get(10, TimeUnit.SECONDS);
 
-                if (batch.getMutationsSize() > 0) {
-                    logger.debug("Commit last batch.");
-                    batch.commit().get();
-                    logger.debug("Last batch inserted.");
-                }
                 logger.info("Collection {} from {} documents created",
                         collectionName,
                         counter);
+                logger.info("Time = {} ms", timer.getTime(TimeUnit.MILLISECONDS));
                 logger.info("Collection {} created, RPS = {}."
                         , collectionName
                 , ((double) counter / timer.getTime(TimeUnit.MILLISECONDS))*1000);
+                counter = 0;
 
             } catch (IOException e) {
                logger.error("Can't read file.", e);
-            } catch (ExecutionException e) {
-                throw new RuntimeException(e);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
             }
         }
