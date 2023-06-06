@@ -1,139 +1,112 @@
 package shpp.level3.util;
 
-import com.google.api.core.ApiFuture;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.firestore.*;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.internal.EmulatorCredentials;
-import org.checkerframework.checker.units.qual.K;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
+import java.util.Objects;
+import java.util.concurrent.*;
 
 public class FireBaseService {
-    private final Logger logger = LoggerFactory.getLogger(FireBaseService.class);
-
-    public Config getConfig() {
-        return config;
-    }
-
+    private final Logger logger = LoggerFactory.getLogger("console");
     Config config;
-
     FirebaseDatabase db;
+    File file;
 
-    public Firestore getFirestore() {
-        return firestore;
-    }
-
-    Firestore firestore;
-
-    public int getBatchSize() {
-        return batchSize;
-    }
-
-    private int batchSize;
-
-
-    public FireBaseService(Config config) throws IOException {
+    public FireBaseService(Config config)  {
         this.config = config;
-        this.batchSize = Integer.parseInt(config.getProperty("batch.size"));
-        File file = new File(
-               getClass().getClassLoader().getResource(config.getProperty("auth.google.json")).getFile()
+        String authFileName = config.getProperty("auth");
+        this.file = new File(
+               Objects.requireNonNull(getClass().getClassLoader().getResource(config.getProperty(authFileName))).getFile()
         );
 
-        FileInputStream inputStream = new FileInputStream(file);
+        init(config);
+
+    }
+
+    public void clearDatabase() {
+        List<CompletableFuture<Void>> futureTasks = new ArrayList<>();
+        for (DBReferences collection : DBReferences.values()) {
+            CompletableFuture<Void> removeTask = removeCollection(collection.getName());
+            futureTasks.add(removeTask);
+        }
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(futureTasks.toArray(CompletableFuture[]::new));
+
+        try {
+            allFutures.get();
+        } catch (InterruptedException | ExecutionException e) {
+            logger.error("Error removing collections: {}", e.getMessage());
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void init(Config config) {
+        FirebaseOptions firebaseOptions;
         logger.debug("Create FirebaseOptions.");
-        FirestoreOptions firestoreOptions = FirestoreOptions.newBuilder()
-                .setCredentials(new EmulatorCredentials())
-                .setEmulatorHost("127.0.0.1:8081")
-                .setProjectId("practice5")
-                .build();
-        FirebaseOptions options = FirebaseOptions.builder()
+        if(config.getProperty("emulate").equals("true")){
+            firebaseOptions = getEmulatorFirebase();
+        }else{
+            firebaseOptions = getProductionFirebase();
+        }
+
+        if(firebaseOptions != null){
+            logger.debug("Init Firebase App");
+            FirebaseApp.initializeApp(firebaseOptions);
+            this.db = FirebaseDatabase.getInstance();
+        }else{
+            logger.debug("Firebase Option is null");
+        }
+    }
+
+    private FirebaseOptions getProductionFirebase() {
+        logger.debug("Get option for production.");
+        try(FileInputStream inputStream = new FileInputStream(file)) {
+            return FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(inputStream))
+                    .setDatabaseUrl(config.getProperty("database.url"))
+                    .build();
+
+        } catch (IOException e) {
+            logger.error("Can't open file with credentials.", e);
+        }
+        return null;
+    }
+
+    private FirebaseOptions getEmulatorFirebase() {
+        logger.debug("Get options for emulator");
+        return FirebaseOptions.builder()
                 .setCredentials(new EmulatorCredentials())
                 .setProjectId("practice5")
                 .setDatabaseUrl(config.getProperty("database.url"))
                 .build();
-
-        logger.debug("Init Firebase App");
-        FirebaseApp app = FirebaseApp.initializeApp(options);
-
-        db = FirebaseDatabase.getInstance();
-        inputStream = new FileInputStream(file);
-//        FirestoreOptions firestoreOptions = FirestoreOptions.newBuilder()
-//                .setProjectId("practice5")
-//                .setCredentials(GoogleCredentials.fromStream(inputStream))
-//                .build();
-//        FirestoreOptions firestoreOptions = FirestoreOptions.newBuilder()
-//                .setCredentials(GoogleCredentials.fromStream(inputStream))
-//                .setProjectId("practice5") // Замініть на свій ID проекту
-//                .setHost("127.0.0.1:8081")
-//                .build();
-        firestore = firestoreOptions.getService();
     }
 
-    public CollectionReference getCollection(String collection){
-        return firestore.collection(collection);
+    private CompletableFuture<Void> removeCollection(String collectionName){
+        CompletableFuture<Void> removeTask = new CompletableFuture<>();
+        DatabaseReference dbRef = getDb().getReference(collectionName);
+        dbRef.removeValue((databaseError, databaseReference) -> {
+            if(databaseError != null) {
+                logger.debug("Can't remove collection {}", collectionName);
+            }else{
+                logger.debug("Remove {} collection.", collectionName);
+            }
+                removeTask.complete(null);
+
+        });
+        return removeTask;
     }
+
 
     public FirebaseDatabase getDb() {
         return db;
     }
 
-    public void closeFirestore() throws Exception {
-        this.firestore.close();
-    }
-
-
-    public void deleteCollection(String collectionName) {
-        logger.info("Deleting collection {}", collectionName);
-        CollectionReference collection = getCollection(collectionName);
-
-        try {
-            // Get all documents in the collection
-            ApiFuture<QuerySnapshot> future = collection.get();
-            QuerySnapshot snapshot = future.get();
-            List<QueryDocumentSnapshot> documents = snapshot.getDocuments();
-
-            // Create a batch to perform the deletion
-            WriteBatch batch = collection.getFirestore().batch();
-            for (QueryDocumentSnapshot document : documents) {
-                batch.delete(document.getReference());
-            }
-
-            // Commit the batch to delete all documents
-            batch.commit();
-            logger.debug("Collection {} deleted.", collectionName);
-        } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error deleting collection.", e);
-        }
-    }
-
-
-    public long getDocumentCount(String collectionName) {
-        CollectionReference collection = getCollection(collectionName);
-
-        try {
-            ApiFuture<QuerySnapshot> future = collection.get();
-            QuerySnapshot snapshot = future.get();
-
-            // Отримуємо кількість документів у колекції
-            long count = snapshot.size();
-            return count;
-        } catch (InterruptedException | ExecutionException e) {
-            // Обробка винятку при отриманні результату
-            logger.error("Error getting document count.", e);
-        }
-
-        return -1; // Повертаємо -1 у разі помилки
-    }
 }

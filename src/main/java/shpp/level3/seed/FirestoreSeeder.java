@@ -23,16 +23,12 @@ import java.util.concurrent.TimeoutException;
 public class FirestoreSeeder {
     private final Logger logger = LoggerFactory.getLogger(FirestoreSeeder.class);
     FireBaseService fireBaseService;
-
-
-
     int counter = 0;
-
     public FirestoreSeeder(FireBaseService fireBaseService) {
         this.fireBaseService = fireBaseService;
     }
 
-    public void seed(String filename) throws IOException {
+    public void seed(String filename)  {
 
         String collectionName = filename.substring(0, filename.lastIndexOf("."));
         StopWatch timer = new StopWatch();
@@ -70,7 +66,8 @@ public class FirestoreSeeder {
             } catch (IOException e) {
                logger.error("Can't read file.", e);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
+                logger.error("Can't seed collection {}", collectionName, e);
+                Thread.currentThread().interrupt();
             }
         }
     }

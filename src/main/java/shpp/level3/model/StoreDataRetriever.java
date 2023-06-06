@@ -11,12 +11,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 
-public class ProductTypeDetailsRetriever {
-        private final Logger logger = LoggerFactory.getLogger(ProductTypeDetailsRetriever.class);
+public class StoreDataRetriever {
+        private final Logger logger = LoggerFactory.getLogger(StoreDataRetriever.class);
         private final FireBaseService fireBaseService;
         StopWatch timer = new StopWatch();
 
-        public ProductTypeDetailsRetriever(FireBaseService fireBaseService) {
+        public StoreDataRetriever(FireBaseService fireBaseService) {
             this.fireBaseService = fireBaseService;
         }
 
@@ -78,7 +78,7 @@ public class ProductTypeDetailsRetriever {
             Query query = dbRef.child("inventory-by-type")
                     .child(productTypeUID)
                     .child("stores")
-                    .orderByChild("quantity")
+                    .orderByValue()
                     .limitToLast(1);
             logger.info("Query path = {}", query.getPath());
             query.addListenerForSingleValueEvent(new ValueEventListener() {
@@ -86,8 +86,10 @@ public class ProductTypeDetailsRetriever {
                 public void onDataChange(DataSnapshot dataSnapshot) {
                     logger.info("snapshot = {}", dataSnapshot);
                     if (dataSnapshot.exists()) {
-                        String storeUID = dataSnapshot.getChildren().iterator().next().getKey();
-                        logger.info("Store UID with max quantity = {}", storeUID);
+                        DataSnapshot dataSnapshot1 = dataSnapshot.getChildren().iterator().next();
+                        String storeUID = dataSnapshot1.getKey();
+                        Integer qty = dataSnapshot1.getValue(Integer.class);
+                        logger.info("Store UID {} with max quantity = {}", storeUID, qty);
                         uid.append(storeUID);
                     } else {
                         logger.info("No stores found for the given product type");

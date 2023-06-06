@@ -1,70 +1,96 @@
 package shpp.level3.seed;
 
-import com.google.api.core.ApiFuture;
 import com.google.firebase.database.*;
 import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import shpp.level3.model.Product;
 import shpp.level3.util.FireBaseService;
 import shpp.level3.util.RandomGenerator;
 
-import java.security.KeyStore;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class InventorySeeder {
-    private final Logger logger = LoggerFactory.getLogger(InventorySeeder.class);
+    private final Logger logger = LoggerFactory.getLogger("console");
     private final FireBaseService fireBaseService;
 
+    private final AtomicInteger inventoryCounter = new AtomicInteger(0);
     public InventorySeeder(FireBaseService fireBaseService) {
         this.fireBaseService = fireBaseService;
     }
     public void generateInventory() {
 
-       // updateInventoryByType();
         Map<String, Object> products = getProducts();
         Set<String> storeKeys = getStoreKeys();
-        logger.info("Generate inventory. Stores {}", storeKeys.size());
+        logger.info("Generate inventory {} from {} products for {} stores.",
+                storeKeys.size() * products.size(), products.size(), storeKeys.size());
         StopWatch timer = new StopWatch();
         timer.start();
         int counter = 0;
+        ExecutorService executor = Executors.newCachedThreadPool();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+
 
         for (String storeKey : storeKeys) {
             for (Map.Entry<String, Object> product : products.entrySet()) {
                 Map<String, Object> productData = (Map<String, Object>) product.getValue();
-                int quantity = 1;
-                updateInventory(storeKey, product.getKey(), (String) productData.get("type"), quantity);
+                int quantity = RandomGenerator.getRandom().nextInt(10)+1;
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() ->
+                        insertInventory(storeKey, product.getKey(), (String) productData.get("type"), quantity)
+                        , executor);
+
+                futures.add(future);
                 counter++;
+                if(counter % 100 == 0){
+                    logger.info("Generated {} inventory", counter);
+                    CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
+
+                    try {
+                        allFutures.get();
+                        futures.clear();
+                    } catch (InterruptedException | ExecutionException e) {
+                        logger.error("Error generating inventory: {}", e.getMessage());
+                        Thread.currentThread().interrupt();
+                    }
+                }
             }
         }
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
 
+        try {
+            allFutures.get();
+        } catch (InterruptedException | ExecutionException e) {
+            logger.error("Error generating inventory: {}", e.getMessage());
+            Thread.currentThread().interrupt();
+        }
+
+        executor.shutdown();
+        timer.stop();
         logger.info("Inventory generation completed successfully.");
-        logger.info("Generated {} inventory with RPS={}", counter, ((double)counter / timer.getTime(TimeUnit.MILLISECONDS)) * 1000);
+        logger.info("Generated {} inventory with RPS={}", inventoryCounter, ((double)inventoryCounter.get() / timer.getTime(TimeUnit.MILLISECONDS)) * 1000);
     }
     private Map<String, Object> getProducts() {
         CountDownLatch done = new CountDownLatch(1);
+        StopWatch timer = new StopWatch();
+        timer.start();
         DatabaseReference dbRef = fireBaseService.getDb().getReference();
         final Map<String, Object>[] products = new Map[]{new HashMap<>()};
-        logger.info("Get products");
+        logger.info("Get products collection.");
         dbRef.child("products").addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.exists()) {
 
                         products[0] = (Map<String, Object>) dataSnapshot.getValue();
-                        logger.info("get {} products", products[0].size());
+                        logger.info("Receive {} products for {}ms", products[0].size(), timer.getTime(TimeUnit.MILLISECONDS));
                 }
                 done.countDown();
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
+                logger.error("Canceled insertion", databaseError.toException());
                 done.countDown();
             }
         });
@@ -73,23 +99,25 @@ public class InventorySeeder {
             done.await();
         } catch (InterruptedException e) {
             logger.error("Interrupt insert");
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
 
-        logger.info("Products = {}", products[0]);
         return products[0];
     }
     private Set<String> getStoreKeys() {
         CountDownLatch done = new CountDownLatch(1);
+        StopWatch timer = new StopWatch();
+        timer.start();
         DatabaseReference dbRef = fireBaseService.getDb().getReference();
         final Set<String> keys = new HashSet<>();
-        logger.debug("Get stores keys");
+        logger.info("Get stores keys");
         dbRef.child("stores").addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.exists()) {
                         Map<String, Object> stores = (Map<String, Object>) dataSnapshot.getValue();
                         keys.addAll(stores.keySet());
+                    logger.info("Receive {} stores keys for {}ms", stores.size(), timer.getTime(TimeUnit.MILLISECONDS));
                 }
                 done.countDown();
             }
@@ -104,61 +132,43 @@ public class InventorySeeder {
             done.await();
         } catch (InterruptedException e) {
             logger.error("Interrupt insert");
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
 
         logger.debug("Store Keys = {}", keys);
         return keys;
     }
 
-    private void updateInventory(String storeKey, String productTypeKey, String typeUid, Integer quantity) {
+
+    private void insertInventory(String storeKey, String productTypeKey, String typeUid, Integer quantity) {
         DatabaseReference inventory = fireBaseService.getDb().getReference("inventory").push();
         Map<String, Object> inventoryData = new HashMap<>();
         inventoryData.put("store_uid", storeKey);
         inventoryData.put("product_uid", productTypeKey);
         inventoryData.put("product_type_uid", typeUid);
         inventoryData.put("quantity", quantity);
-        updateInventoryByType(inventoryData);
-        ApiFuture<Void> future = inventory.setValueAsync(inventoryData);
-        try {
-            future.get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            throw new RuntimeException(e);
-        }
+
+        CompletableFuture<Void> inventoryFuture = setAsyncValue(inventory, inventoryData);
+        inventoryFuture.join();
+
+
     }
-    private void updateInventoryByType(Map<String, Object> inventoryData) {
-        String productTypeUid = (String) inventoryData.get("product_type_uid");
-        String storeUid = (String) inventoryData.get("store_uid");
-        Integer quantity = (Integer) inventoryData.get("quantity");
-        DatabaseReference inventory = fireBaseService.getDb().getReference("inventory-by-type")
-                .child(productTypeUid)
-                .child("stores")
-                .child(storeUid);
-        logger.debug("type_uid={} store_id = {} quantity = {}", productTypeUid, storeUid, quantity);
-        inventory.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                Map<String, Object> inventoryByType = new HashMap<>();
 
-                if(dataSnapshot.exists()){
-                    logger.info("quantity1 = {}, quantity={}", dataSnapshot.child("quantity").getValue(), quantity);
-                    Integer quantity1 = dataSnapshot.child("quantity").getValue(Integer.class);
-                    inventoryByType.put("quantity", quantity1 + quantity);
-                    logger.info("Found inventory quantity = {}", quantity1);
-                }else{
-                    inventoryByType.put("quantity", quantity);
-                }
+    private CompletableFuture<Void> setAsyncValue(DatabaseReference dbRef, Object value) {
+        logger.debug("set value = {} to ref={}", value, dbRef.getRef());
+        CompletableFuture<Void> future = new CompletableFuture<>();
 
-                inventory.setValueAsync(inventoryByType);
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-
+        dbRef.setValue(value, (databaseError, databaseReference) -> {
+            if(databaseError == null){
+                logger.debug("Value set. {}", value);
+                inventoryCounter.incrementAndGet();
+                future.complete(null);
+            }else{
+                future.completeExceptionally(new Throwable("Can't set value"));
             }
         });
 
+        return future;
     }
-
 
 }
