@@ -140,12 +140,13 @@ public class InventorySeeder {
     }
 
 
-    private void insertInventory(String storeKey, String productTypeKey, String typeUid, Integer quantity) {
-        DatabaseReference inventory = fireBaseService.getDb().getReference("inventory").push();
+    private void insertInventory(String storeKey, String productUid, String typeUid, Integer quantity) {
+        DatabaseReference inventory = fireBaseService.getDb()
+                .getReference("inventory")
+                .child(typeUid)
+                .child(storeKey);
         Map<String, Object> inventoryData = new HashMap<>();
-        inventoryData.put("store_uid", storeKey);
-        inventoryData.put("product_uid", productTypeKey);
-        inventoryData.put("product_type_uid", typeUid);
+        inventoryData.put("product_uid", productUid);
         inventoryData.put("quantity", quantity);
 
         CompletableFuture<Void> inventoryFuture = setAsyncValue(inventory, inventoryData);

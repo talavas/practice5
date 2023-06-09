@@ -64,13 +64,13 @@ public class ProductSeeder {
     }
 
     public void generateProducts(int count, Set<String> productTypes) {
-        logger.debug("Generate products.");
+        logger.info("Generate {} products.", count);
         timer.reset();
         timer.start();
         Map<String, Product> products = new HashMap<>();
 
         List<String> productTypesList = new ArrayList<>(productTypes);
-        while (productCounter.get() <= count){
+        while (productCounter.get() < count){
             String uid = UUID.randomUUID().toString();
             String name = RandomGenerator.generateRandomString();
             String type = getRandomProductTypeUid(productTypesList);
@@ -79,6 +79,7 @@ public class ProductSeeder {
             logger.debug("Generate product: {}", product);
             if(isValidProduct(product)){
                 products.put(uid, product);
+                productCounter.incrementAndGet();
             }
             if (products.size() % 100 == 0) {
                 insertProducts(products);
@@ -102,7 +103,6 @@ public class ProductSeeder {
 
             try {
                 future.get(10, TimeUnit.SECONDS);
-                productCounter.incrementAndGet();
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 logger.error("Error insert products", e);
                 Thread.currentThread().interrupt();

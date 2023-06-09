@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 
-public class FirestoreSeeder {
-    private final Logger logger = LoggerFactory.getLogger(FirestoreSeeder.class);
+public class FirebaseSeederFromCSV {
+    private final Logger logger = LoggerFactory.getLogger(FirebaseSeederFromCSV.class);
     FireBaseService fireBaseService;
     int counter = 0;
-    public FirestoreSeeder(FireBaseService fireBaseService) {
+    public FirebaseSeederFromCSV(FireBaseService fireBaseService) {
         this.fireBaseService = fireBaseService;
     }
 

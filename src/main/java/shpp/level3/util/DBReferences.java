@@ -4,8 +4,8 @@ public enum DBReferences {
     PRODUCTS("products"),
     INVENTORY("inventory"),
     PRODUCT_TYPES("product-types"),
+    STORES("stores"),
     INVENTORY_BY_TYPE("inventory-by-type");
-
     private final  String name;
 
     DBReferences(String name){

@@ -5,6 +5,7 @@ import com.google.firebase.database.*;
 import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import shpp.level3.util.DBReferences;
 import shpp.level3.util.FireBaseService;
 
 import java.util.HashMap;
@@ -20,7 +21,7 @@ public class InventoryUpdater {
 
     public InventoryUpdater(FireBaseService fireBaseService) {
         this.fireBaseService = fireBaseService;
-        this.inventoryByTypeRef = fireBaseService.getDb().getReference("inventory-by-type");
+        this.inventoryByTypeRef = fireBaseService.getDb().getReference(DBReferences.INVENTORY_BY_TYPE.getName());
         this.types = new ProductSeeder(fireBaseService).getProductTypeKeys();
 
     }
@@ -37,19 +38,22 @@ public class InventoryUpdater {
 
     public void updateInventoryByType(String typeUid) {
         CountDownLatch done = new CountDownLatch(1);
-        DatabaseReference inventoryRef = fireBaseService.getDb().getReference("inventory");
+        DatabaseReference inventoryRef = fireBaseService.getDb().getReference("inventory").child(typeUid);
         logger.debug("Inventory Ref = {}", inventoryRef.getRef());
-        Query query = inventoryRef.orderByChild("product_type_uid").equalTo(typeUid);
 
-        query.addListenerForSingleValueEvent(new ValueEventListener() {
+        inventoryRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                logger.debug("Inventory snapShot = {}", dataSnapshot);
+                logger.info("Inventory snapShot = {}", dataSnapshot);
                 Map<String, Integer> inventoryByStore = new HashMap<>();
 
                 for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-                    String storeKey = snapshot.child("store_uid").getValue(String.class);
-                    Integer quantity = snapshot.child("quantity").getValue(Integer.class);
+                    logger.debug("Children snapshot = {}", snapshot);
+
+                    String storeKey = snapshot.getKey();
+                    Map<String, Object> productInventory = (Map<String, Object>) snapshot.getValue();
+                    Integer quantity = Integer.parseInt(productInventory.get("quantity").toString());
+                    logger.debug("StoreKey = {}, quantity = {}", storeKey, quantity);
 
                     if (inventoryByStore.containsKey(storeKey)) {
                         int existingQuantity = inventoryByStore.get(storeKey);

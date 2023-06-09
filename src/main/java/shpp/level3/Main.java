@@ -1,45 +1,54 @@
 package shpp.level3;
 
 import shpp.level3.model.StoreDataRetriever;
-import shpp.level3.seed.FirestoreSeeder;
+import shpp.level3.seed.FirebaseSeederFromCSV;
 import shpp.level3.seed.InventorySeeder;
 import shpp.level3.seed.InventoryUpdater;
 import shpp.level3.seed.ProductSeeder;
 import shpp.level3.util.Config;
 import shpp.level3.util.FireBaseService;
-import shpp.level3.util.FirebaseRulesManager;
 
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public class Main {
-    public static void main(String[] args) throws Exception {
-        Config config = new Config("app.properties");
+    public static final String PRODUCT_TYPES_CSV = "product-types.csv";
+    public static final String STORES_CSV = "stores.csv";
+    public static final String APP_PROPERTIES = "app.properties";
+
+    public static void main(String[] args)  {
+        Config config = new Config(APP_PROPERTIES);
         FireBaseService fireBaseService = new FireBaseService(config);
-        fireBaseService.clearDatabase();
+        String productType = System.getProperty("type");
+        if(productType == null){
+            fireBaseService.clearDatabase();
 
-        FirestoreSeeder seeder = new FirestoreSeeder(fireBaseService);
-        seeder.seed("product-types.csv");
-        seeder.seed("stores.csv");
+            FirebaseSeederFromCSV seeder = new FirebaseSeederFromCSV(fireBaseService);
+            seeder.seed(PRODUCT_TYPES_CSV);
+            seeder.seed(STORES_CSV);
 
-        ProductSeeder productSeeder = new ProductSeeder(fireBaseService);
-        Set<String> productTypeKeys = productSeeder.getProductTypeKeys();
-        productSeeder.generateProducts(Integer.parseInt(config.getProperty("products.count")), productTypeKeys);
+            ProductSeeder productSeeder = new ProductSeeder(fireBaseService);
+            Set<String> productTypeKeys = productSeeder.getProductTypeKeys();
+            productSeeder.generateProducts(Integer.parseInt(config.getProperty("products.count")), productTypeKeys);
 
-        InventorySeeder inventorySeeder = new InventorySeeder(fireBaseService);
-        CompletableFuture<Void> inventorySeedFuture = CompletableFuture.runAsync(inventorySeeder::generateInventory);
+            InventorySeeder inventorySeeder = new InventorySeeder(fireBaseService);
+            CompletableFuture<Void> inventorySeedFuture = CompletableFuture.runAsync(inventorySeeder::generateInventory);
 
-        FirebaseRulesManager rulesManager = new FirebaseRulesManager(config);
-        rulesManager.setNewRules();
-        InventoryUpdater inventoryUpdater = new InventoryUpdater(fireBaseService);
+            InventoryUpdater inventoryUpdater = new InventoryUpdater(fireBaseService);
 
-        CompletableFuture<Void> updateInventoryFuture = inventorySeedFuture
+            CompletableFuture<Void> updateInventoryFuture = inventorySeedFuture
                 .thenCompose(voidResult -> CompletableFuture.runAsync(inventoryUpdater::update));
 
-        updateInventoryFuture.join();
+            updateInventoryFuture.join();
 
-        StoreDataRetriever store = new StoreDataRetriever(fireBaseService);
-        store.retrieveProductTypeDetails("Клей");
+            StoreDataRetriever store = new StoreDataRetriever(fireBaseService);
+            store.retrieveProductTypeDetails("Клей");
+            store.retrieveProductTypeDetails("Фурнітура для дверей");
+        }else{
+            StoreDataRetriever store = new StoreDataRetriever(fireBaseService);
+            store.retrieveProductTypeDetails(productType);
+        }
+
 
     }
 

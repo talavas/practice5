@@ -12,23 +12,21 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.*;
 
 public class FireBaseService {
     private final Logger logger = LoggerFactory.getLogger("console");
     Config config;
     FirebaseDatabase db;
-    File file;
 
-    public FireBaseService(Config config)  {
+    public FireBaseService(Config config) {
         this.config = config;
-        String authFileName = config.getProperty("auth");
-        this.file = new File(
-               Objects.requireNonNull(getClass().getClassLoader().getResource(config.getProperty(authFileName))).getFile()
-        );
 
-        init(config);
+        try {
+            init(config);
+        } catch (IOException e) {
+            logger.error("Can't connect to db: ", e);
+        }
 
     }
 
@@ -48,43 +46,47 @@ public class FireBaseService {
         }
     }
 
-    private void init(Config config) {
+    private void init(Config config) throws IOException {
         FirebaseOptions firebaseOptions;
         logger.debug("Create FirebaseOptions.");
-        if(config.getProperty("emulate").equals("true")){
+        if (config.getProperty("emulate").equals("true")) {
             firebaseOptions = getEmulatorFirebase();
-        }else{
+        } else {
             firebaseOptions = getProductionFirebase();
         }
 
-        if(firebaseOptions != null){
-            logger.debug("Init Firebase App");
-            FirebaseApp.initializeApp(firebaseOptions);
-            this.db = FirebaseDatabase.getInstance();
-        }else{
+        if (firebaseOptions != null) {
+            logger.info("Init Firebase App, {}", firebaseOptions.getDatabaseUrl());
+            FirebaseApp app = FirebaseApp.initializeApp(firebaseOptions);
+            this.db = FirebaseDatabase.getInstance(app);
+        } else {
             logger.debug("Firebase Option is null");
         }
     }
 
-    private FirebaseOptions getProductionFirebase() {
-        logger.debug("Get option for production.");
-        try(FileInputStream inputStream = new FileInputStream(file)) {
+
+    private FirebaseOptions getProductionFirebase() throws IOException {
+        logger.info("Get connection details and create Firebase Options.");
+
+        InputStream serviceAccount = getClass().getClassLoader().getResourceAsStream(config.getProperty("auth"));
+
+        if(serviceAccount != null){
             return FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(inputStream))
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
                     .setDatabaseUrl(config.getProperty("database.url"))
                     .build();
 
-        } catch (IOException e) {
-            logger.error("Can't open file with credentials.", e);
+        } else {
+            logger.error("Can't open file with credentials.");
         }
         return null;
     }
 
     private FirebaseOptions getEmulatorFirebase() {
-        logger.debug("Get options for emulator");
+        logger.info("Get options for emulator");
         return FirebaseOptions.builder()
                 .setCredentials(new EmulatorCredentials())
-                .setProjectId("practice5")
+                .setProjectId("demo-practice5")
                 .setDatabaseUrl(config.getProperty("database.url"))
                 .build();
     }
@@ -92,6 +94,7 @@ public class FireBaseService {
     private CompletableFuture<Void> removeCollection(String collectionName){
         CompletableFuture<Void> removeTask = new CompletableFuture<>();
         DatabaseReference dbRef = getDb().getReference(collectionName);
+        logger.debug("Remove collection {}", dbRef);
         dbRef.removeValue((databaseError, databaseReference) -> {
             if(databaseError != null) {
                 logger.debug("Can't remove collection {}", collectionName);
