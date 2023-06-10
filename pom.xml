@@ -133,9 +133,6 @@
                                                 <exclude>*.properties</exclude>
                                                 <exclude>logback.xml</exclude>
                                                 <exclude>*.json</exclude>
-                                                <exclude>META-INF/*.SF</exclude>
-                                                <exclude>META-INF/*.DSA</exclude>
-                                                <exclude>META-INF/*.RSA</exclude>
                                             </excludes>
                                         </filter>
                                     </filters>
@@ -179,7 +176,9 @@
                             <excludes>
                                 <exclude>**/*.properties</exclude>
                                 <exclude>**/logback.xml</exclude>
+                                <exclude>*.json</exclude>
                             </excludes>
+                            <finalName>${project.artifactId}</finalName>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -193,7 +192,7 @@
                                     <goal>single</goal>
                                 </goals>
                                 <configuration>
-                                    <finalName>practice4-thin-jar</finalName>
+                                    <finalName>practice5</finalName>
                                     <descriptors>
                                         <descriptor>src/assembly/${assembly.env}.xml</descriptor>
                                     </descriptors>

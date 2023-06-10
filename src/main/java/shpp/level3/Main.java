@@ -8,7 +8,6 @@ import shpp.level3.seed.ProductSeeder;
 import shpp.level3.util.Config;
 import shpp.level3.util.FireBaseService;
 
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public class Main {
@@ -28,8 +27,7 @@ public class Main {
             seeder.seed(STORES_CSV);
 
             ProductSeeder productSeeder = new ProductSeeder(fireBaseService);
-            Set<String> productTypeKeys = productSeeder.getProductTypeKeys();
-            productSeeder.generateProducts(Integer.parseInt(config.getProperty("products.count")), productTypeKeys);
+            productSeeder.generateProducts(Integer.parseInt(config.getProperty("products.count")));
 
             InventorySeeder inventorySeeder = new InventorySeeder(fireBaseService);
             CompletableFuture<Void> inventorySeedFuture = CompletableFuture.runAsync(inventorySeeder::generateInventory);
@@ -48,7 +46,6 @@ public class Main {
             StoreDataRetriever store = new StoreDataRetriever(fireBaseService);
             store.retrieveProductTypeDetails(productType);
         }
-
 
     }
 

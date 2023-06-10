@@ -5,7 +5,7 @@
             <pattern>%d{HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
-    <logger name="console" level="DEBUG" additivity="false">
+    <logger name="console" level="INFO" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

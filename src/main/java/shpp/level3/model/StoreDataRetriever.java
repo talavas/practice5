@@ -7,8 +7,7 @@ import org.slf4j.LoggerFactory;
 import shpp.level3.util.FireBaseService;
 
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 
 public class StoreDataRetriever {
@@ -44,9 +43,8 @@ public class StoreDataRetriever {
         }
 
         private String getProductTypeUID(String productTypeName) {
-            CountDownLatch done = new CountDownLatch(1);
+            CompletableFuture<String> getTypeUid = new CompletableFuture<>();
             DatabaseReference dbRef = fireBaseService.getDb().getReference();
-            StringBuilder uid = new StringBuilder();
 
             Query query = dbRef.child("product-types").orderByChild("name").equalTo(productTypeName);
             query.addListenerForSingleValueEvent(new ValueEventListener() {
@@ -54,79 +52,79 @@ public class StoreDataRetriever {
                 public void onDataChange(DataSnapshot dataSnapshot) {
                     logger.debug("Data snapshot = {}", dataSnapshot);
                     if (dataSnapshot.exists()) {
-                        String key = dataSnapshot.getChildren().iterator().next().getKey();
-                        uid.append(key);
-                        logger.info("Product type UID = {}", key);
-                        done.countDown();
+                        getTypeUid.complete(dataSnapshot.getChildren().iterator().next().getKey());
                     } else {
-                        logger.info("Product type for {} not found in database.", productTypeName);
+                        getTypeUid.complete(null);
+                        logger.info("Product type for name {} not found in database.", productTypeName);
                     }
-                    done.countDown();
                 }
 
                 @Override
                 public void onCancelled(DatabaseError databaseError) {
                     logger.error("Failed to retrieve product types");
-                    done.countDown();
+                    getTypeUid.complete(null);
                 }
             });
+            String typeUid = null;
             try {
-                done.await();
-            } catch (InterruptedException e) {
-                logger.error("Firebase operation interrupt. ", e);
+                typeUid = getTypeUid.get(10, TimeUnit.SECONDS);
+                logger.debug("Receive typeUid = {} for {}ms",typeUid, timer.getTime(TimeUnit.MILLISECONDS));
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                logger.error("Can't receive products list", e);
                 Thread.currentThread().interrupt();
             }
-            return uid.length() > 0 ? uid.toString() : null;
+
+            return typeUid;
         }
 
         private String getStoreWithMaxQuantity(String productTypeUID) {
-            CountDownLatch done = new CountDownLatch(1);
-            StringBuilder uid = new StringBuilder();
+            CompletableFuture<String> getStoreUid = new CompletableFuture<>();
             DatabaseReference dbRef = fireBaseService.getDb().getReference();
             Query query = dbRef.child("inventory-by-type")
                     .child(productTypeUID)
                     .child("stores")
                     .orderByValue()
                     .limitToLast(1);
-            logger.info("Query path = {}", query.getPath());
+            logger.debug("Query path = {}", query.getPath());
             query.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot dataSnapshot) {
                     logger.debug("Query = {}, snapshot = {}", query, dataSnapshot);
                     if (dataSnapshot.exists()) {
-                        DataSnapshot dataSnapshot1 = dataSnapshot.getChildren().iterator().next();
-                        String storeUID = dataSnapshot1.getKey();
-                        Integer qty = dataSnapshot1.getValue(Integer.class);
-                        logger.info("Store UID {} with max quantity = {}", storeUID, qty);
-                        uid.append(storeUID);
+                        DataSnapshot storeSnapShot = dataSnapshot.getChildren().iterator().next();
+                        getStoreUid.complete(storeSnapShot.getKey());
+                        Integer qty = storeSnapShot.getValue(Integer.class);
+                        logger.info("Знайдено магазин з UID {} з набільшою кількістю = {}", storeSnapShot.getKey(), qty);
                     } else {
-                        logger.info("No stores found for the given product type");
+                        logger.info("Немає магазинів де є товари типу з uid = {}", productTypeUID);
+                        getStoreUid.complete(null);
                     }
-                    done.countDown();
                 }
 
                 @Override
                 public void onCancelled(DatabaseError databaseError) {
-                    logger.error("Failed to retrieve store with max quantity");
-                    done.countDown();
+                    logger.error("Запит на пошук магазину скасовано, причина: ", databaseError.toException());
+                    getStoreUid.complete(null);
                 }
             });
+            String storeUid = null;
+
             try {
-                done.await();
-            } catch (InterruptedException e) {
-                logger.error("Interrupt insert", e);
+                storeUid = getStoreUid.get(10, TimeUnit.SECONDS);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                logger.error("Can't receive store uid.", e);
                 Thread.currentThread().interrupt();
             }
-            return uid.length() > 0 ? uid.toString() : null;
+            return storeUid;
         }
 
         private void getStoreDetails(String storeUID) {
-            CountDownLatch done = new CountDownLatch(1);
+            CompletableFuture<String> getStoreDetails = new CompletableFuture<>();
             DatabaseReference dbRef = fireBaseService.getDb().getReference("stores").child(storeUID);
             dbRef.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot dataSnapshot) {
-                    logger.info("datasnapShop = {}", dataSnapshot);
+                    logger.debug("Store details snap shot = {}", dataSnapshot);
                     if (dataSnapshot.exists()) {
                         Map<String, Object> store = (Map<String, Object>) dataSnapshot.getValue();
                         logger.info("Деталі магазину:");
@@ -135,19 +133,20 @@ public class StoreDataRetriever {
                     } else {
                         logger.info("Не знайдено деталей магазину.");
                     }
-                    done.countDown();
+                    getStoreDetails.complete(null);
                 }
 
                 @Override
                 public void onCancelled(DatabaseError databaseError) {
                     logger.error("Failed to retrieve store details");
-                    done.countDown();
+                   getStoreDetails.complete(null);
                 }
             });
+
             try {
-                done.await();
-            } catch (InterruptedException e) {
-                logger.error("Interrupt insert", e);
+               getStoreDetails.get(10, TimeUnit.SECONDS);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                logger.error("Can't receive store details.", e);
                 Thread.currentThread().interrupt();
             }
         }

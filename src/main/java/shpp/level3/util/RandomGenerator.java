@@ -1,5 +1,6 @@
 package shpp.level3.util;
 
+import java.util.List;
 import java.util.Random;
 
 public class RandomGenerator {
@@ -20,5 +21,9 @@ public class RandomGenerator {
                 .limit(length + 1L)
                 .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
                 .toString();
+    }
+
+    public static String getRandomKeyFromKeysList(List<String> list){
+        return list.get(RandomGenerator.getRandom().nextInt(list.size()));
     }
 }
