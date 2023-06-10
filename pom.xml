@@ -82,9 +82,6 @@
     <profiles>
         <profile>
             <id>fat</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
             <build>
                 <plugins>
                     <plugin>
@@ -207,7 +204,7 @@
         <profile>
             <id>jar</id>
             <activation>
-                <activeByDefault>false</activeByDefault>
+                <activeByDefault>true</activeByDefault>
             </activation>
             <build>
             <plugins>
