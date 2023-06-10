@@ -45,6 +45,7 @@ public class Main {
         }else{
             StoreDataRetriever store = new StoreDataRetriever(fireBaseService);
             store.retrieveProductTypeDetails(productType);
+            store.retrieveProductTypeDetails(productType);
         }
 
     }
