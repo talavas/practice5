@@ -21,7 +21,7 @@ public class InventorySeeder {
     public InventorySeeder(FireBaseService fireBaseService) {
         this.fireBaseService = fireBaseService;
     }
-    public void generateInventory() {
+    public int generateInventory() {
         Set<String> storesKeys = fireBaseService.getKeys(DBReferences.STORES.getName());
         Set<String> productTypesKeys = fireBaseService.getKeys(DBReferences.PRODUCT_TYPES.getName());
         timer.reset();
@@ -40,7 +40,9 @@ public class InventorySeeder {
             }
 
         logger.info("Inventory generation completed successfully.");
-        logger.info("Generated {} inventory with RPS={}", inventoryCounter, ((double)inventoryCounter.get() / timer.getTime(TimeUnit.MILLISECONDS)) * 1000);
+        logger.info("Generated {} inventory with RPS={}", inventoryCounter,
+                ((double)inventoryCounter.get() / timer.getTime(TimeUnit.MILLISECONDS)) * 1000);
+        return  inventoryCounter.get();
     }
 
     private void seedInventoryToStores(Set<String> storesKeys, Map<String, Object> products) {
@@ -57,7 +59,7 @@ public class InventorySeeder {
                 listOfInsertTask.add(insertAsync);
                 counter++;
                 if(counter % 100 == 0){
-                    logger.info("Generated {} inventory", counter);
+                    logger.info("Generated {} inventory", inventoryCounter.get());
                     CompletableFuture<Void> allInsertTasks = CompletableFuture.allOf(listOfInsertTask.toArray(CompletableFuture[]::new));
 
                     try {
@@ -74,7 +76,7 @@ public class InventorySeeder {
 
         try {
             allInsertTask.get();
-            logger.info("Generated {} inventory", counter);
+            logger.info("Generated {} inventory", inventoryCounter.get());
         } catch (InterruptedException | ExecutionException e) {
             logger.error("Error generating inventory: {}", e.getMessage());
             Thread.currentThread().interrupt();

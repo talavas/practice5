@@ -144,14 +144,15 @@ public class FireBaseService {
         Set<String> keys = new HashSet<>();
         try {
             keys = getKeysAsync.get(10, TimeUnit.SECONDS);
-            logger.info("Receive {} keys from path={} for {} ms",keys.size(), path, timer.getTime(TimeUnit.MILLISECONDS));
+
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             logger.error("Can't receive products list", e);
             Thread.currentThread().interrupt();
         }
+
+        logger.info("Receive {} keys from path={} for {} ms",keys.size(), path, timer.getTime(TimeUnit.MILLISECONDS));
         timer.stop();
         timer.reset();
-
         logger.debug("Received keys = {}", keys);
         return keys;
     }

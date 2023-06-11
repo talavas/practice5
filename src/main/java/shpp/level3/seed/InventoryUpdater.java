@@ -31,17 +31,16 @@ public class InventoryUpdater {
         timer.start();
         logger.info("Creating collection inventory-by-type.");
         for(String typeUid : productTypesKeys){
-            updateInventoryByType(typeUid);
+            DatabaseReference inventoryRef = fireBaseService.getDb()
+                    .getReference(DBReferences.INVENTORY.getName()).child(typeUid);
+            updateInventoryByType(typeUid, inventoryRef);
         }
         logger.info("Collection inventory-by-type created, time exec = {}ms", timer.getTime(TimeUnit.MILLISECONDS));
     }
 
-    private void updateInventoryByType(String typeUid) {
+    protected void updateInventoryByType(String typeUid, DatabaseReference dbRef) {
         CompletableFuture<Void> updateInventory = new CompletableFuture<>();
-        DatabaseReference inventoryRef = fireBaseService.getDb().getReference("inventory").child(typeUid);
-        logger.debug("Inventory Ref = {}", inventoryRef.getRef());
-
-        inventoryRef.addListenerForSingleValueEvent(new ValueEventListener() {
+        dbRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 logger.debug("Inventory snapShot = {}", dataSnapshot);

@@ -31,7 +31,7 @@ public class ProductSeeder {
 
     }
 
-    public void generateProducts(int count) {
+    public int generateProducts(int count) {
         logger.info("Generating {} products.", count);
         timer.reset();
         timer.start();
@@ -42,9 +42,9 @@ public class ProductSeeder {
         while (productCounter.get() < count){
             String uid = UUID.randomUUID().toString();
             String name = RandomGenerator.generateRandomString();
-            String type = RandomGenerator.getRandomKeyFromKeysList(productTypesList);
+            String typeUid = RandomGenerator.getRandomKeyFromKeysList(productTypesList);
             String price = String.format("%.2f", (RandomGenerator.getRandom().nextDouble() * 100)).replace(",", ".");
-            Product product = new Product(name, type, price);
+            Product product = new Product(name, typeUid, price);
             logger.debug("Generate product: {}", product);
             if(isValidProduct(product)){
                 products.put(uid, product);
@@ -67,6 +67,7 @@ public class ProductSeeder {
         logger.info("Generated no valid products = {}", noValidProduct.get());
         logger.info("Insert {} valid products", productCounter.get());
         logger.info("RPS = {}.", ((double) productCounter.get() / timer.getTime(TimeUnit.MILLISECONDS)) * 1000);
+        return productCounter.get();
     }
 
     public void insertProducts(Map<String, Product> products) {
