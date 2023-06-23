@@ -17,12 +17,12 @@ public class InventoryUpdater {
     private final Logger logger = LoggerFactory.getLogger("console");
     private final DatabaseReference inventoryByTypeRef;
     private final FireBaseService fireBaseService;
-    Set<String> types;
+    Set<String> productTypesKeys;
 
     public InventoryUpdater(FireBaseService fireBaseService) {
         this.fireBaseService = fireBaseService;
         this.inventoryByTypeRef = fireBaseService.getDb().getReference(DBReferences.INVENTORY_BY_TYPE.getName());
-        this.types = new ProductSeeder(fireBaseService).getProductTypeKeys();
+        this.productTypesKeys = fireBaseService.getKeys(DBReferences.PRODUCT_TYPES.getName());
 
     }
 
@@ -30,59 +30,59 @@ public class InventoryUpdater {
         StopWatch timer = new StopWatch();
         timer.start();
         logger.info("Creating collection inventory-by-type.");
-        for(String type : types){
-            updateInventoryByType(type);
+        for(String typeUid : productTypesKeys){
+            DatabaseReference inventoryRef = fireBaseService.getDb()
+                    .getReference(DBReferences.INVENTORY.getName()).child(typeUid);
+            updateInventoryByType(typeUid, inventoryRef);
         }
         logger.info("Collection inventory-by-type created, time exec = {}ms", timer.getTime(TimeUnit.MILLISECONDS));
     }
 
-    public void updateInventoryByType(String typeUid) {
-        CountDownLatch done = new CountDownLatch(1);
-        DatabaseReference inventoryRef = fireBaseService.getDb().getReference("inventory").child(typeUid);
-        logger.debug("Inventory Ref = {}", inventoryRef.getRef());
-
-        inventoryRef.addListenerForSingleValueEvent(new ValueEventListener() {
+    protected void updateInventoryByType(String typeUid, DatabaseReference dbRef) {
+        CompletableFuture<Void> updateInventory = new CompletableFuture<>();
+        dbRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                logger.info("Inventory snapShot = {}", dataSnapshot);
+                logger.debug("Inventory snapShot = {}", dataSnapshot);
                 Map<String, Integer> inventoryByStore = new HashMap<>();
 
                 for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
                     logger.debug("Children snapshot = {}", snapshot);
 
                     String storeKey = snapshot.getKey();
-                    Map<String, Object> productInventory = (Map<String, Object>) snapshot.getValue();
-                    Integer quantity = Integer.parseInt(productInventory.get("quantity").toString());
-                    logger.debug("StoreKey = {}, quantity = {}", storeKey, quantity);
-
-                    if (inventoryByStore.containsKey(storeKey)) {
-                        int existingQuantity = inventoryByStore.get(storeKey);
-                        inventoryByStore.put(storeKey, existingQuantity + quantity);
-                    } else {
-                        inventoryByStore.put(storeKey, quantity);
+                    for(DataSnapshot snapshot1 : snapshot.getChildren()) {
+                        Map<String, Object> productInventory = (Map<String, Object>) snapshot1.getValue();
+                        Integer quantity = Integer.parseInt(productInventory.get("quantity").toString());
+                        logger.debug("StoreKey = {}, quantity = {}", storeKey, quantity);
+                        if (inventoryByStore.containsKey(storeKey)) {
+                            int existingQuantity = inventoryByStore.get(storeKey);
+                            inventoryByStore.put(storeKey, existingQuantity + quantity);
+                        } else {
+                            inventoryByStore.put(storeKey, quantity);
+                        }
                     }
-                    logger.debug("Push inventory storeKey={}", storeKey);
                 }
-
                 DatabaseReference inventoryByType = inventoryByTypeRef
                         .child(typeUid)
                         .child("stores");
 
                 inventoryByType.setValueAsync(inventoryByStore);
-                done.countDown();
+                updateInventory.complete(null);
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
                logger.debug("Canceled query {}", databaseError.getMessage());
-               done.countDown();
+               updateInventory.complete(null);
+
             }
         });
         try {
-            done.await();
-        } catch (InterruptedException e) {
-            logger.error("Interrupt insert");
-           Thread.currentThread().interrupt();
+            updateInventory.get(10, TimeUnit.SECONDS);
+            logger.debug("Inventory for typeUid={} updated", typeUid);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            logger.error("Can't update inventory-by-type.", e);
+            Thread.currentThread().interrupt();
         }
     }
 }

@@ -17,12 +17,12 @@ public class Product {
         this.name = name;
     }
 
-    public String getType() {
-        return type;
+    public String getTypeUid() {
+        return typeUid;
     }
 
-    public void setType(String type) {
-        this.type = type;
+    public void setTypeUid(String typeUid) {
+        this.typeUid = typeUid;
     }
 
     public Double getPrice() {
@@ -37,17 +37,17 @@ public class Product {
     @Size(min = 5)
     protected String name;
     @NotNull
-    protected String type;
+    protected String typeUid;
     @NotNull
     @Positive
     protected Double price;
 
 
     public Product( String name,
-                    String type,
+                    String typeUid,
                     String price) {
         this.name = name;
-        this.type = type;
+        this.typeUid = typeUid;
         this.price = Double.parseDouble(price);
     }
 
@@ -60,7 +60,7 @@ public class Product {
     public String toString() {
         return "Product{" +
                 "name='" + name + '\'' +
-                ", type='" + type + '\'' +
+                ", type='" + typeUid + '\'' +
                 ", price=" + price +
                 '}';
     }

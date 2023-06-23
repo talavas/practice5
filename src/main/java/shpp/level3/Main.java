@@ -8,7 +8,6 @@ import shpp.level3.seed.ProductSeeder;
 import shpp.level3.util.Config;
 import shpp.level3.util.FireBaseService;
 
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public class Main {
@@ -21,23 +20,21 @@ public class Main {
         FireBaseService fireBaseService = new FireBaseService(config);
         String productType = System.getProperty("type");
         if(productType == null){
-            fireBaseService.clearDatabase();
-
-            FirebaseSeederFromCSV seeder = new FirebaseSeederFromCSV(fireBaseService);
-            seeder.seed(PRODUCT_TYPES_CSV);
-            seeder.seed(STORES_CSV);
-
-            ProductSeeder productSeeder = new ProductSeeder(fireBaseService);
-            Set<String> productTypeKeys = productSeeder.getProductTypeKeys();
-            productSeeder.generateProducts(Integer.parseInt(config.getProperty("products.count")), productTypeKeys);
-
-            InventorySeeder inventorySeeder = new InventorySeeder(fireBaseService);
-            CompletableFuture<Void> inventorySeedFuture = CompletableFuture.runAsync(inventorySeeder::generateInventory);
+//            fireBaseService.clearDatabase();
+//
+//            FirebaseSeederFromCSV seeder = new FirebaseSeederFromCSV(fireBaseService);
+//            seeder.seed(PRODUCT_TYPES_CSV);
+//            seeder.seed(STORES_CSV);
+//
+//            ProductSeeder productSeeder = new ProductSeeder(fireBaseService);
+//            productSeeder.generateProducts(Integer.parseInt(config.getProperty("products.count")));
+//
+//            InventorySeeder inventorySeeder = new InventorySeeder(fireBaseService);
+//            CompletableFuture<Void> inventorySeedFuture = CompletableFuture.runAsync(inventorySeeder::generateInventory);
 
             InventoryUpdater inventoryUpdater = new InventoryUpdater(fireBaseService);
 
-            CompletableFuture<Void> updateInventoryFuture = inventorySeedFuture
-                .thenCompose(voidResult -> CompletableFuture.runAsync(inventoryUpdater::update));
+            CompletableFuture<Void> updateInventoryFuture = CompletableFuture.runAsync(inventoryUpdater::update);
 
             updateInventoryFuture.join();
 
@@ -47,8 +44,8 @@ public class Main {
         }else{
             StoreDataRetriever store = new StoreDataRetriever(fireBaseService);
             store.retrieveProductTypeDetails(productType);
+            store.retrieveProductTypeDetails(productType);
         }
-
 
     }
 

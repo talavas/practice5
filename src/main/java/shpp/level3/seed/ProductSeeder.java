@@ -20,6 +20,8 @@ public class ProductSeeder {
     private final Logger logger = LoggerFactory.getLogger("console");
     private final FireBaseService fireBaseService;
     private final AtomicInteger productCounter = new AtomicInteger(0);
+
+    private final AtomicInteger noValidProduct = new AtomicInteger(0);
     StopWatch timer = new StopWatch();
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
@@ -29,74 +31,47 @@ public class ProductSeeder {
 
     }
 
-    public Set<String> getProductTypeKeys() {
-        CountDownLatch done = new CountDownLatch(1);
-        DatabaseReference dbRef = fireBaseService.getDb().getReference(DBReferences.PRODUCT_TYPES.getName());
-        final Set<String> keys = new HashSet<>();
-        dbRef.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                if (dataSnapshot.exists()) {
-                    Map<String, Object> types = (Map<String, Object>) dataSnapshot.getValue();
-                    keys.addAll(types.keySet());
-                }
-                    done.countDown();
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                logger.debug("Canceled read product-types.");
-                done.countDown();
-            }
-        });
-        try {
-            done.await();
-        } catch (InterruptedException e) {
-            logger.error("Interrupt insert");
-           Thread.currentThread().interrupt();
-        }
-        logger.debug("Keys = {}", keys);
-        return keys;
-    }
-    private String getRandomProductTypeUid(List<String> productTypes) {
-        logger.debug("Get random uid type");
-        return productTypes.get(RandomGenerator.getRandom().nextInt(productTypes.size()));
-    }
-
-    public void generateProducts(int count, Set<String> productTypes) {
-        logger.info("Generate {} products.", count);
+    public int generateProducts(int count) {
+        logger.info("Generating {} products.", count);
         timer.reset();
         timer.start();
         Map<String, Product> products = new HashMap<>();
+        Set<String> productTypesKeys = fireBaseService.getKeys(DBReferences.PRODUCT_TYPES.getName());
 
-        List<String> productTypesList = new ArrayList<>(productTypes);
+        List<String> productTypesList = new ArrayList<>(productTypesKeys);
         while (productCounter.get() < count){
             String uid = UUID.randomUUID().toString();
             String name = RandomGenerator.generateRandomString();
-            String type = getRandomProductTypeUid(productTypesList);
+            String typeUid = RandomGenerator.getRandomKeyFromKeysList(productTypesList);
             String price = String.format("%.2f", (RandomGenerator.getRandom().nextDouble() * 100)).replace(",", ".");
-            Product product = new Product(name, type, price);
+            Product product = new Product(name, typeUid, price);
             logger.debug("Generate product: {}", product);
             if(isValidProduct(product)){
                 products.put(uid, product);
                 productCounter.incrementAndGet();
+            }else{
+                noValidProduct.incrementAndGet();
             }
             if (products.size() % 100 == 0) {
+                logger.info("Generated {} products.", productCounter.get());
                 insertProducts(products);
                 products = new HashMap<>();
             }
         }
         if(products.size() > 0){
+            logger.info("Generated {} products.", productCounter.get());
             insertProducts(products);
             products.clear();
         }
 
-        logger.info("Insert {} products", productCounter.get());
+        logger.info("Generated no valid products = {}", noValidProduct.get());
+        logger.info("Insert {} valid products", productCounter.get());
         logger.info("RPS = {}.", ((double) productCounter.get() / timer.getTime(TimeUnit.MILLISECONDS)) * 1000);
+        return productCounter.get();
     }
 
     public void insertProducts(Map<String, Product> products) {
-        DatabaseReference ref = fireBaseService.getDb().getReference("products");
+        DatabaseReference ref = fireBaseService.getDb().getReference(DBReferences.PRODUCTS.getName());
         for( Map.Entry<String, Product> product : products.entrySet()){
 
             ApiFuture<Void> future = ref.child(product.getKey()).setValueAsync(product.getValue());

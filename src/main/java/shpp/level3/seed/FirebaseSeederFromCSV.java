@@ -29,7 +29,7 @@ public class FirebaseSeederFromCSV {
     }
 
     public void seed(String filename)  {
-
+        counter = 0;
         String collectionName = filename.substring(0, filename.lastIndexOf("."));
         StopWatch timer = new StopWatch();
 
@@ -61,7 +61,7 @@ public class FirebaseSeederFromCSV {
                 logger.info("Collection {} created, RPS = {}."
                         , collectionName
                 , ((double) counter / timer.getTime(TimeUnit.MILLISECONDS))*1000);
-                counter = 0;
+
 
             } catch (IOException e) {
                logger.error("Can't read file.", e);
